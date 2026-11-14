@@ -1,22 +1,31 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ConversationType, ParticipantRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateConversationDto } from './dto/create-conversation.dto.js';
+
+const ConversationType = { PRIVATE: 'PRIVATE' } as const;
+const ParticipantRole = { ADMIN: 'ADMIN', MEMBER: 'MEMBER' } as const;
 
 @Injectable()
 export class ConversationsService {
   constructor(private prisma: PrismaService) {}
 
+  private get db(): any {
+    return this.prisma as any;
+  }
+
   async create(userId: string, dto: CreateConversationDto) {
     const participantIds = [...new Set([...dto.participantIds, userId])];
-    if (dto.type === ConversationType.PRIVATE && participantIds.length !== 2) {
+    const isPrivate = (dto.type as string) === ConversationType.PRIVATE;
+    if (isPrivate && participantIds.length !== 2) {
       throw new BadRequestException('Private conversations must have exactly two participants');
     }
-    const users = await this.prisma.user.count({ where: { id: { in: participantIds } } });
-    if (users !== participantIds.length) throw new BadRequestException('One or more users do not exist');
+    const users = await this.db.user.count({ where: { id: { in: participantIds } } });
+    if (users !== participantIds.length) {
+      throw new BadRequestException('One or more users do not exist');
+    }
 
-    if (dto.type === ConversationType.PRIVATE) {
-      const existing = await this.prisma.conversation.findFirst({
+    if (isPrivate) {
+      const existing = await this.db.conversation.findFirst({
         where: {
           type: ConversationType.PRIVATE,
           AND: participantIds.map(id => ({ participants: { some: { userId: id } } })),
@@ -26,7 +35,7 @@ export class ConversationsService {
       if (existing && existing.participants.length === 2) return existing;
     }
 
-    return this.prisma.conversation.create({
+    return this.db.conversation.create({
       data: {
         type: dto.type, name: dto.name, createdBy: userId,
         participants: {
@@ -41,7 +50,7 @@ export class ConversationsService {
   }
 
   list(userId: string) {
-    return this.prisma.conversation.findMany({
+    return this.db.conversation.findMany({
       where: { participants: { some: { userId } } },
       include: {
         participants: { include: { user: { select: { id: true, username: true, avatarUrl: true, lastSeen: true } } } },
@@ -52,7 +61,7 @@ export class ConversationsService {
   }
 
   async assertParticipant(conversationId: string, userId: string) {
-    const participant = await this.prisma.conversationParticipant.findUnique({
+    const participant = await this.db.conversationParticipant.findUnique({
       where: { conversationId_userId: { conversationId, userId } },
     });
     if (!participant) throw new ForbiddenException('You are not a participant of this conversation');
@@ -61,7 +70,7 @@ export class ConversationsService {
 
   async getOne(conversationId: string, userId: string) {
     await this.assertParticipant(conversationId, userId);
-    const conversation = await this.prisma.conversation.findUnique({
+    const conversation = await this.db.conversation.findUnique({
       where: { id: conversationId },
       include: { participants: { include: { user: { select: { id: true, username: true, avatarUrl: true } } } } },
     });
@@ -73,7 +82,7 @@ export class ConversationsService {
     const actor = await this.assertParticipant(conversationId, actorId);
     if (actor.role !== ParticipantRole.ADMIN) throw new ForbiddenException('Only admins can add participants');
     const uniqueIds = [...new Set(userIds)].filter(id => id !== actorId);
-    return this.prisma.conversationParticipant.createMany({
+    return this.db.conversationParticipant.createMany({
       data: uniqueIds.map(userId => ({ conversationId, userId })),
       skipDuplicates: true,
     });
