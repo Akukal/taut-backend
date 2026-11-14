@@ -1,5 +1,9 @@
 import { ArrayMinSize, IsArray, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
-import { ConversationType } from '@prisma/client';
+
+enum ConversationType {
+  DIRECT = 'DIRECT',
+  GROUP = 'GROUP',
+}
 
 export class CreateConversationDto {
   @IsEnum(ConversationType) type: ConversationType;
