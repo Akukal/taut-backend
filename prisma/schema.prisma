@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConversationType {
+  PRIVATE
+  GROUP
+}
+
+enum ParticipantRole {
+  MEMBER
+  ADMIN
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+enum ReceiptStatus {
+  DELIVERED
+  READ
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  avatarUrl    String?
+  statusText   String?  @default("Available")
+  lastSeen     DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  participants  ConversationParticipant[]
+  messages      Message[]
+  receipts      MessageReceipt[]
+  conversations Conversation[] @relation("CreatedConversations")
+}
+
+model Conversation {
+  id        String           @id @default(uuid()) @db.Uuid
+  type      ConversationType @default(PRIVATE)
+  name      String?
+  avatarUrl String?
+  createdBy String?          @db.Uuid
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  creator      User?                     @relation("CreatedConversations", fields: [createdBy], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([updatedAt(sort: Desc)])
+}
+
+model ConversationParticipant {
+  id                String          @id @default(uuid()) @db.Uuid
+  conversationId    String          @db.Uuid
+  userId            String          @db.Uuid
+  role              ParticipantRole @default(MEMBER)
+  lastReadMessageId String?         @db.Uuid
+  joinedAt          DateTime        @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage Message? @relation("LastReadMessage", fields: [lastReadMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  conversationId String      @db.Uuid
+  senderId       String      @db.Uuid
+  replyToId      String?     @db.Uuid
+  content        String?
+  messageType    MessageType @default(TEXT)
+  attachmentUrl  String?
+  isEdited       Boolean     @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  replyTo      Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]    @relation("MessageReplies")
+  receipts     MessageReceipt[]
+  lastReadBy   ConversationParticipant[] @relation("LastReadMessage")
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderId])
+}
+
+model MessageReceipt {
+  id        String        @id @default(uuid()) @db.Uuid
+  messageId String        @db.Uuid
+  userId    String        @db.Uuid
+  status    ReceiptStatus @default(DELIVERED)
+  updatedAt DateTime      @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, status])
+}
