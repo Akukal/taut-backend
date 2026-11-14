@@ -1,5 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+
+// Load the generated client without relying on its type exports.
+const PrismaClient: any = require('@prisma/client').PrismaClient;
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
