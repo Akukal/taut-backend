@@ -1,16 +1,13 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsUUID, ArrayMinSize } from 'class-validator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ConversationsService } from './conversations.service';
-import { CreateConversationDto } from './dto/create-conversation.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { ConversationsService } from './conversations.service.js';
+import { CreateConversationDto } from './dto/create-conversation.dto.js';
 
 class AddParticipantsDto {
   @IsArray() @ArrayMinSize(1) @IsUUID('4', { each: true }) userIds: string[];
 }
 
-@ApiTags('Conversations')
-@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
 export class ConversationsController {
